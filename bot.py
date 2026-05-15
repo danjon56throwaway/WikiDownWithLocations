@@ -1,22 +1,3 @@
-from __future__ import annotations
-
-import asyncio
-import json
-import logging
-import os
-import re
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Optional
-from urllib.parse import urlparse
-
-import aiohttp
-import discord
-from discord import app_commands
-from discord.ext import commands, tasks
-from dotenv import load_dotenv
-
 load_dotenv()
 
 logging.basicConfig(
