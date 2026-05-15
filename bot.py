@@ -1135,17 +1135,31 @@ async def on_ready() -> None:
     if http_session is None or http_session.closed:
         http_session = aiohttp.ClientSession()
 
-    if GUILD_ID:
-        guild_obj = discord.Object(id=GUILD_ID)
-        bot.tree.copy_global_to(guild=guild_obj)
-        synced = await bot.tree.sync(guild=guild_obj)
-        sync_target = f"guild {GUILD_ID}"
-    else:
-        synced = await bot.tree.sync()
-        sync_target = "global"
-
     log.info("Logged in as %s (%s)", bot.user, bot.user.id if bot.user else "unknown")
-    log.info("Synced %s slash command(s) to %s: %s", len(synced), sync_target, ", ".join(cmd.name for cmd in synced))
+
+    if not GUILD_ID:
+        log.error("GUILD_ID is required. This build does not register global slash commands.")
+        log.error("Set GUILD_ID in your environment variables to the Discord server ID, then restart the bot.")
+        if not monitor_loop.is_running():
+            monitor_loop.start()
+        return
+
+    # Remove any old global slash commands so Discord does not show duplicate commands.
+    # Commands are then synced only to the configured guild.
+    bot.tree.clear_commands(guild=None)
+    cleared_global = await bot.tree.sync()
+    log.info("Cleared global slash commands; remaining global commands: %s", len(cleared_global))
+
+    guild_obj = discord.Object(id=GUILD_ID)
+    bot.tree.copy_global_to(guild=guild_obj)
+    synced = await bot.tree.sync(guild=guild_obj)
+
+    log.info(
+        "Synced %s guild-only slash command(s) to guild %s: %s",
+        len(synced),
+        GUILD_ID,
+        ", ".join(cmd.name for cmd in synced),
+    )
     if not monitor_loop.is_running():
         monitor_loop.start()
 
