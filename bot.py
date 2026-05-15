@@ -1144,14 +1144,21 @@ async def on_ready() -> None:
             monitor_loop.start()
         return
 
-    # Remove any old global slash commands so Discord does not show duplicate commands.
-    # Commands are then synced only to the configured guild.
+    # Preserve locally defined commands, clear old remote global commands,
+    # then register the preserved commands only on the configured guild.
+    # Do NOT call clear_commands(guild=None) without preserving first; that
+    # empties the local command tree and causes a 0-command guild sync.
+    guild_obj = discord.Object(id=GUILD_ID)
+    local_commands = list(bot.tree.get_commands(guild=None))
+
     bot.tree.clear_commands(guild=None)
-    cleared_global = await bot.tree.sync()
+    cleared_global = await bot.tree.sync(guild=None)
     log.info("Cleared global slash commands; remaining global commands: %s", len(cleared_global))
 
-    guild_obj = discord.Object(id=GUILD_ID)
-    bot.tree.copy_global_to(guild=guild_obj)
+    bot.tree.clear_commands(guild=guild_obj)
+    for command in local_commands:
+        bot.tree.add_command(command, guild=guild_obj)
+
     synced = await bot.tree.sync(guild=guild_obj)
 
     log.info(
