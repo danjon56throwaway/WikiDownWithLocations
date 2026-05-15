@@ -1104,9 +1104,18 @@ async def on_ready() -> None:
     global http_session
     if http_session is None or http_session.closed:
         http_session = aiohttp.ClientSession()
-    synced = await bot.tree.sync()
+
+    if GUILD_ID:
+        guild_obj = discord.Object(id=GUILD_ID)
+        bot.tree.copy_global_to(guild=guild_obj)
+        synced = await bot.tree.sync(guild=guild_obj)
+        sync_target = f"guild {GUILD_ID}"
+    else:
+        synced = await bot.tree.sync()
+        sync_target = "global"
+
     log.info("Logged in as %s (%s)", bot.user, bot.user.id if bot.user else "unknown")
-    log.info("Synced %s slash command(s).", len(synced))
+    log.info("Synced %s slash command(s) to %s: %s", len(synced), sync_target, ", ".join(cmd.name for cmd in synced))
     if not monitor_loop.is_running():
         monitor_loop.start()
 
@@ -1262,7 +1271,6 @@ async def forcecheck(interaction: discord.Interaction) -> None:
 
 
 @bot.tree.command(name="forcefail", description="Send a test outage/slow/recovery alert to configured alert channel(s).")
-@app_commands.default_permissions(administrator=True)
 @app_commands.choices(region=region_choices())
 @app_commands.choices(kind=[
     app_commands.Choice(name="Down", value="down"),
