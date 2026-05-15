@@ -39,6 +39,7 @@ ALERT_CATEGORY_NAME = os.getenv("ALERT_CATEGORY_NAME", "Wikidot Alerts")
 WATCH_ROLE_CHANNEL_NAME = os.getenv("WATCH_ROLE_CHANNEL_NAME", "watch-roles")
 ALERT_CONFIG_FILE = Path(os.getenv("ALERT_CONFIG_FILE", "alert_config.json"))
 ALERT_IMAGE_FILE = Path(os.getenv("ALERT_IMAGE_FILE", "image.png"))
+GUILD_ID = int(os.getenv("GUILD_ID", "0") or "0")
 
 CHECKHOST_START_URL = "https://check-host.net/check-http"
 CHECKHOST_RESULT_URL = "https://check-host.net/check-result/{request_id}"
