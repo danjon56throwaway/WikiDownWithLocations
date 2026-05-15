@@ -993,13 +993,25 @@ async def get_alert_channel(guild: discord.Guild, region: str) -> Optional[disco
     return channel if isinstance(channel, discord.TextChannel) else None
 
 
-async def send_region_alert(guild: discord.Guild, region: str, bad_results: list[NodeResult], *, recovered: bool = False) -> None:
+async def send_region_alert(
+    guild: discord.Guild,
+    region: str,
+    bad_results: list[NodeResult],
+    *,
+    recovered: bool = False,
+    force_mentionable: bool = False,
+) -> None:
     channel = await get_alert_channel(guild, region)
     if channel is None:
         log.warning("No alert channel configured for region %s in guild %s", region, guild.id)
         return
     role_id = get_configured_role_id(guild.id, region)
     role = guild.get_role(role_id) if role_id else discord.utils.get(guild.roles, name=REGIONS[region]["role"])
+    if force_mentionable and role and not role.mentionable:
+        try:
+            await role.edit(mentionable=True, reason="WikiDown alert role mention test")
+        except discord.HTTPException as exc:
+            log.warning("Could not make role %s mentionable before alert: %s", role.name, exc)
     mention = role.mention if role else f"@{REGIONS[region]['role']}"
     allowed = discord.AllowedMentions(roles=True, users=False, everyone=False)
 
@@ -1008,7 +1020,8 @@ async def send_region_alert(guild: discord.Guild, region: str, bad_results: list
             title="WE ARE SO BACK",
             description="WikiDown has re-established connection in your location!",
         )
-        await channel.send(content=mention, embed=embed, allowed_mentions=allowed)
+        sent_message = await channel.send(content=mention, embed=embed, allowed_mentions=allowed)
+        log.info("Sent recovery alert to #%s; suppress_notifications=%s", channel.name, getattr(sent_message.flags, "suppress_notifications", None))
         return
 
     has_down = any(not r.ok for r in bad_results)
@@ -1042,9 +1055,10 @@ async def send_region_alert(guild: discord.Guild, region: str, bad_results: list
         log.warning("Alert image file not found: %s", ALERT_IMAGE_FILE)
 
     if file:
-        await channel.send(content=mention, embed=embed, file=file, allowed_mentions=allowed)
+        sent_message = await channel.send(content=mention, embed=embed, file=file, allowed_mentions=allowed)
     else:
-        await channel.send(content=mention, embed=embed, allowed_mentions=allowed)
+        sent_message = await channel.send(content=mention, embed=embed, allowed_mentions=allowed)
+    log.info("Sent outage alert to #%s; suppress_notifications=%s", channel.name, getattr(sent_message.flags, "suppress_notifications", None))
 
 
 async def evaluate_alerts(snapshot: CheckSnapshot) -> None:
@@ -1333,20 +1347,26 @@ async def forcefail(
     region: Optional[app_commands.Choice[str]] = None,
     kind: Optional[app_commands.Choice[str]] = None,
 ) -> None:
+    # Defer immediately. Discord invalidates interactions that are not acknowledged quickly.
+    try:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+    except discord.NotFound:
+        log.warning("/forcefail interaction expired before it could be acknowledged")
+        return
+
     if interaction.guild is None or not isinstance(interaction.user, discord.Member):
-        await interaction.response.send_message("This command must be used in a server.", ephemeral=True)
+        await interaction.followup.send("This command must be used in a server.", ephemeral=True)
         return
     if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("Only administrators can run this command.", ephemeral=True)
+        await interaction.followup.send("Only administrators can run this command.", ephemeral=True)
         return
-    await interaction.response.defer(ephemeral=True)
 
     selected_kind = kind.value if kind else "down"
     selected_regions = [region.value] if region else [r for r in REGIONS if r != "global"]
     sent = 0
     for region_key in selected_regions:
         if selected_kind == "recovered":
-            await send_region_alert(interaction.guild, region_key, [], recovered=True)
+            await send_region_alert(interaction.guild, region_key, [], recovered=True, force_mentionable=True)
         else:
             fake = NodeResult(
                 node="forcefail-test",
@@ -1358,7 +1378,7 @@ async def forcefail(
                 status_code=200 if selected_kind == "slow" else None,
                 message="Forced test alert",
             )
-            await send_region_alert(interaction.guild, region_key, [fake], recovered=False)
+            await send_region_alert(interaction.guild, region_key, [fake], recovered=False, force_mentionable=True)
         sent += 1
     await interaction.edit_original_response(content=f"Sent {selected_kind} test alert to {sent} channel(s).")
 
