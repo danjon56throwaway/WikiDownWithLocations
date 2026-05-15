@@ -674,9 +674,18 @@ def watch_role_overwrite(*, can_send: bool = False) -> discord.PermissionOverwri
 
 async def apply_selector_permissions(channel: discord.TextChannel) -> None:
     guild = channel.guild
+
+    # Order matters. Give the bot an explicit allow first so hiding/locking
+    # normal member permissions cannot lock the bot out of the selector channel.
+    bot_member = guild.me
+    if bot_member is None:
+        raise RuntimeError(f"Could not resolve bot member while setting #{channel.name} permissions.")
+
+    await asyncio.wait_for(channel.set_permissions(bot_member, overwrite=bot_channel_overwrite()), timeout=20)
+
+    # Everyone can see the selector and react to the bot's message, but cannot type,
+    # create threads, or send messages in threads.
     await asyncio.wait_for(channel.set_permissions(guild.default_role, overwrite=selector_everyone_overwrite()), timeout=20)
-    if guild.me:
-        await asyncio.wait_for(channel.set_permissions(guild.me, overwrite=bot_channel_overwrite()), timeout=20)
 
 
 async def apply_alert_channel_permissions(
@@ -813,10 +822,17 @@ async def ensure_setup(interaction: discord.Interaction) -> None:
     selector_channel = await find_required_text_channel(guild, name=WATCH_ROLE_CHANNEL_NAME)
     cfg["channels"]["selector"] = str(selector_channel.id)
 
-    # Do not manage #watch-roles permissions. This channel is intentionally managed manually
-    # because some servers apply category/channel overwrites that block bot permission edits
-    # unless Administrator is granted. The bot only needs to read/send/react here.
-    await interaction.edit_original_response(content="Setup: using existing #watch-roles permissions...")
+    if AUTO_MANAGE_ALERT_CHANNEL_PERMISSIONS:
+        await interaction.edit_original_response(content="Setup: locking #watch-roles so only the bot can type...")
+        try:
+            await apply_selector_permissions(selector_channel)
+        except discord.Forbidden as exc:
+            raise RuntimeError(
+                f"Discord denied permission while setting #{selector_channel.name} permissions: {exc}. "
+                "Make the channel visible to the bot and ensure it has Manage Channels, then rerun /setupalerts."
+            ) from exc
+    else:
+        await interaction.edit_original_response(content="Setup: using existing #watch-roles permissions...")
 
     await interaction.edit_original_response(content="Setup: finding existing regional alert channels...")
     global_role = roles.get("global")
