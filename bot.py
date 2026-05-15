@@ -1008,7 +1008,7 @@ async def send_region_alert(guild: discord.Guild, region: str, bad_results: list
             title="WE ARE SO BACK",
             description="WikiDown has re-established connection in your location!",
         )
-        await channel.send(content=mention, embed=embed, allowed_mentions=allowed, silent=True)
+        await channel.send(content=mention, embed=embed, allowed_mentions=allowed, silent=False)
         return
 
     has_down = any(not r.ok for r in bad_results)
@@ -1042,9 +1042,9 @@ async def send_region_alert(guild: discord.Guild, region: str, bad_results: list
         log.warning("Alert image file not found: %s", ALERT_IMAGE_FILE)
 
     if file:
-        await channel.send(content=mention, embed=embed, file=file, allowed_mentions=allowed, silent=True)
+        await channel.send(content=mention, embed=embed, file=file, allowed_mentions=allowed, silent=False)
     else:
-        await channel.send(content=mention, embed=embed, allowed_mentions=allowed, silent=True)
+        await channel.send(content=mention, embed=embed, allowed_mentions=allowed, silent=False)
 
 
 async def evaluate_alerts(snapshot: CheckSnapshot) -> None:
