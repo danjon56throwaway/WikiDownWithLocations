@@ -1012,7 +1012,10 @@ async def send_region_alert(
             await role.edit(mentionable=True, reason="WikiDown alert role mention test")
         except discord.HTTPException as exc:
             log.warning("Could not make role %s mentionable before alert: %s", role.name, exc)
-    mention = role.mention if role else f"@{REGIONS[region]['role']}"
+    raw_mention = role.mention if role else f"@{REGIONS[region]['role']}"
+    # Prefix with a zero-width space so the mention is not the first character in the payload.
+    # This is harmless visually and helps avoid Discord/client edge cases around leading mentions.
+    mention = f"\u200b{raw_mention}"
     allowed = discord.AllowedMentions(roles=True, users=False, everyone=False)
 
     if recovered:
