@@ -686,12 +686,21 @@ async def apply_alert_channel_permissions(
     global_role: Optional[discord.Role],
 ) -> None:
     guild = channel.guild
-    await asyncio.wait_for(channel.set_permissions(guild.default_role, overwrite=private_everyone_overwrite()), timeout=20)
-    if guild.me:
-        await asyncio.wait_for(channel.set_permissions(guild.me, overwrite=bot_channel_overwrite()), timeout=20)
+
+    # Order matters. If @everyone is denied first, the bot can lose access before it
+    # has an explicit channel overwrite. Grant the bot access first, then grant watch
+    # roles, and only then hide the channel from @everyone.
+    bot_member = guild.me
+    if bot_member is None:
+        raise RuntimeError(f"Could not resolve bot member while setting #{channel.name} permissions.")
+
+    await asyncio.wait_for(channel.set_permissions(bot_member, overwrite=bot_channel_overwrite()), timeout=20)
     await asyncio.wait_for(channel.set_permissions(region_role, overwrite=watch_role_overwrite()), timeout=20)
     if global_role and global_role != region_role:
         await asyncio.wait_for(channel.set_permissions(global_role, overwrite=watch_role_overwrite()), timeout=20)
+
+    # Last step: make the channel private after bot and watch-role access is guaranteed.
+    await asyncio.wait_for(channel.set_permissions(guild.default_role, overwrite=private_everyone_overwrite()), timeout=20)
 
 
 def selector_channel_overwrites(guild: discord.Guild) -> dict[discord.abc.Snowflake, discord.PermissionOverwrite]:
