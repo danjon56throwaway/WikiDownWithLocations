@@ -133,6 +133,7 @@ COUNTRY_TO_REGION = {
     "bulgaria": "europe",
     "croatia": "europe",
     "czech republic": "europe",
+    "czechia": "europe",
     "denmark": "europe",
     "estonia": "europe",
     "finland": "europe",
@@ -152,6 +153,7 @@ COUNTRY_TO_REGION = {
     "romania": "europe",
     "russia": "europe",
     "serbia": "europe",
+    "slovenia": "europe",
     "slovakia": "europe",
     "spain": "europe",
     "sweden": "europe",
@@ -756,16 +758,17 @@ async def find_required_text_channel(guild: discord.Guild, *, name: str) -> disc
     return channel
 
 
-def build_selector_message() -> str:
+def build_selector_embed() -> discord.Embed:
     lines = [
-        "**Wikidot Alert Subscriptions**",
-        "",
-        "React to add or remove a regional watch role.",
+        "React with the matching number to add or remove a regional watch role.",
         "",
     ]
     for region, data in REGIONS.items():
         lines.append(f"{data['emoji']} — **{data['label']}**")
-    return "\n".join(lines)
+    return discord.Embed(
+        title="WikiDown Alert Subscriptions",
+        description="\n".join(lines),
+    )
 
 
 async def ensure_selector_message(channel: discord.TextChannel, guild_id: int) -> discord.Message:
@@ -780,11 +783,11 @@ async def ensure_selector_message(channel: discord.TextChannel, guild_id: int) -
         except discord.Forbidden as exc:
             raise RuntimeError(f"Bot cannot fetch messages in #{channel.name}: {exc}") from exc
 
-    content = build_selector_message()
+    embed = build_selector_embed()
     if message is None:
-        message = await asyncio.wait_for(channel.send(content), timeout=20)
+        message = await asyncio.wait_for(channel.send(embed=embed), timeout=20)
     else:
-        await asyncio.wait_for(message.edit(content=content), timeout=20)
+        await asyncio.wait_for(message.edit(content=None, embed=embed), timeout=20)
 
     for region in REGIONS.values():
         emoji = region["emoji"]
@@ -1293,7 +1296,7 @@ async def status(interaction: discord.Interaction) -> None:
         "**Accessible Check-Host nodes**",
     ]
 
-    region_order = ["north-america", "europe", "asia-pacific", "middle-east", "south-america", "global"]
+    region_order = ["north-america", "europe", "asia-pacific", "middle-east", "south-america"]
     by_region: dict[str, list[NodeResult]] = {region: [] for region in REGIONS}
     for result in sorted(latest_snapshot.monitored_results, key=lambda r: (REGIONS.get(r.region, {}).get("label", r.region), r.location, r.node)):
         by_region.setdefault(result.region, []).append(result)
